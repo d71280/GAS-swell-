@@ -485,10 +485,19 @@ function runRefreshExistingForSelectedRow_() {
 function calendarSyncForRow_(row) {
   const sh = U.sh(CONFIG.SHEETS.MAIN);
   const info = readRowInfo(row);
-  if (!info) return;
+  if (!info) {
+    console.warn(`⚠️ calendarSync skip: 顧客情報の取得に失敗 (行${row})`);
+    return;
+  }
+
+  // 新郎・新婦名のチェック
+  if (!info.groom || !info.bride) {
+    console.warn(`⚠️ calendarSync skip: 新郎・新婦名が空 (行${row})`);
+    return;
+  }
 
   if (!info.photoDate || !(info.photoDate instanceof Date)) {
-    console.log('calendarSync skip: 撮影日なし', row);
+    console.warn(`⚠️ calendarSync skip: 撮影日なし (行${row}, 新郎: ${info.groom}, 新婦: ${info.bride})`);
     return;
   }
 
@@ -510,13 +519,16 @@ function calendarSyncForRow_(row) {
   // ① このお客さんの撮影／締切イベントを全部削除（失敗したら即エラー）
   try {
     const summary = DL.clearAllEventsFor(info);
-    console.log('🧹 clearAllEventsFor summary:', JSON.stringify(summary));
+    console.log(`🧹 clearAllEventsFor summary: ${JSON.stringify(summary)}`);
+
+    // 削除件数をログ出力
+    const totalDeleted = summary.reduce((sum, s) => sum + s.deleted, 0);
+    console.log(`✅ カレンダーイベント削除完了: ${totalDeleted}件 (行${row}, ${info.groom} × ${info.bride})`);
   } catch (err) {
     // メニュー実行や単発関数からわかりやすいように行番号＋新郎新婦を付けて投げる
-    throw new Error(
-      `calendarSyncForRow_: カレンダー削除に失敗しました。` +
-      `行: ${row}, 新郎: ${info.groom}, 新婦: ${info.bride} / 理由: ${err.message}`
-    );
+    const errMsg = `カレンダー削除に失敗しました。行: ${row}, 新郎: ${info.groom}, 新婦: ${info.bride} / 理由: ${err.message}`;
+    console.error(`❌ ${errMsg}`);
+    throw new Error(errMsg);
   }
 
   // ② 撮影イベント（撮影カレンダー）作成＋説明更新
@@ -542,6 +554,24 @@ function calendarSyncForRow_(row) {
 
 
 
+
+// カレンダー同期（選択行）
+function runCalendarSyncForSelectedRow_(){
+  const sh = U.sh(CONFIG.SHEETS.MAIN);
+  const ranges = sh.getActiveRangeList().getRanges();
+  ranges.forEach(r=>{
+    const row = r.getRow();
+    if(row<=1) return;
+    try {
+      calendarSyncForRow_(row);
+      console.log(`✅ カレンダー同期完了: 行${row}`);
+    } catch (err) {
+      console.error(`❌ カレンダー同期エラー (行${row}):`, err);
+      SpreadsheetApp.getActive().toast(`⚠️ 行${row}のカレンダー同期に失敗しました: ${err.message}`);
+    }
+  });
+  SpreadsheetApp.getActive().toast('📅 カレンダー同期を実行しました');
+}
 
 // スケジュール反映
 function runScheduleApplyForSelectedRow_(){

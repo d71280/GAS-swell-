@@ -801,6 +801,17 @@ clearAllEventsFor(info) {
     CONFIG.DEADLINE.CALENDAR_ID_DEADLINE
   ];
 
+  // 名前を正規化（空白・記号を削除）
+  const normalizeForMatch = (str) => {
+    return String(str || '')
+      .replace(/[　\s]/g, '')  // 全角・半角スペース削除
+      .replace(/[様さん]/g, '')  // 敬称削除
+      .toLowerCase();
+  };
+
+  const groomNorm = normalizeForMatch(groom);
+  const brideNorm = normalizeForMatch(bride);
+
   const summary = [];
 
   calIds.forEach(id => {
@@ -819,9 +830,10 @@ clearAllEventsFor(info) {
 
       events.forEach(ev => {
         const title = ev.getTitle() || '';
+        const titleNorm = normalizeForMatch(title);
 
-        // タイトルに新郎・新婦両方の名前が含まれているものだけ削除
-        if (title.includes(groom) && title.includes(bride)) {
+        // タイトルに新郎・新婦両方の名前が含まれているものだけ削除（正規化して比較）
+        if (titleNorm.includes(groomNorm) && titleNorm.includes(brideNorm)) {
           try {
             ev.deleteEvent();
             count++;
