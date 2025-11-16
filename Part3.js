@@ -141,6 +141,17 @@ function updateInternalPageOnly_(row, hearingData) {
     }
   }
 
+  // 🗓 社内スケジュールの位置を特定
+  let scheduleHeadingIdx = -1;
+  for (let i = startIdx + 1; i < deleteEnd; i++) {
+    const child = body.getChild(i);
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH &&
+        child.asParagraph().getText().trim() === '🗓 社内スケジュール') {
+      scheduleHeadingIdx = i;
+      break;
+    }
+  }
+
   // 既存のムービーヒアリング見出しを削除
   for (let i = deleteEnd - 1; i > startIdx; i--) {
     const child = body.getChild(i);
@@ -163,6 +174,10 @@ function updateInternalPageOnly_(row, hearingData) {
         for (let k = endDelete - 1; k >= i; k--) {
           try {
             body.removeChild(body.getChild(k));
+            // 削除後、社内スケジュールの位置を調整
+            if (scheduleHeadingIdx > k) {
+              scheduleHeadingIdx--;
+            }
           } catch (e) {
             console.log('削除スキップ:', e);
           }
@@ -172,20 +187,16 @@ function updateInternalPageOnly_(row, hearingData) {
     }
   }
 
-  // ムービーヒアリング情報があれば追加
+  // ムービーヒアリング情報があれば追加（社内スケジュールの直前に挿入）
   if (hearingData && hearingData.length > 0) {
     const hHeaders = hearingData[0];
     const hRow = hearingData[1]; // データは2行目（1行目はヘッダー）
 
-    // 🗓 社内スケジュールの前に挿入
-    let insertIdx = body.getNumChildren() - 1;
-    for (let i = startIdx + 1; i < body.getNumChildren(); i++) {
-      const child = body.getChild(i);
-      if (child.getType() === DocumentApp.ElementType.PARAGRAPH &&
-          child.asParagraph().getText().trim() === '🗓 社内スケジュール') {
-        insertIdx = i;
-        break;
-      }
+    // 社内スケジュールの直前に挿入
+    let insertIdx = scheduleHeadingIdx;
+    if (insertIdx === -1) {
+      // 社内スケジュールが見つからない場合は、セクションの最後
+      insertIdx = deleteEnd;
     }
 
     body.insertParagraph(insertIdx, '🎥 ムービーヒアリング情報')
