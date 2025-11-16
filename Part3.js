@@ -551,14 +551,24 @@ function calendarSyncForRow_(row) {
   DL.ensureShootEvent(info);
   DL.refreshShootEventDescription(info);
 
-  // ③ 締切イベント：未決定のものだけ作成
+  // ③ 締切イベント作成
   Object.entries(CONFIG.DEADLINE.ITEMS).forEach(([label, def]) => {
-    if (def.type !== 'undecided') return;
-
-    const val = String(U.getVal(sh, def.col, row) || '');
-    if (val !== CONFIG.DEADLINE.VALUE_UNDECIDED) return;
-
-    DL.createDeadlineIfNeeded(info, label, def);
+    // type: 'undecided' の場合
+    if (def.type === 'undecided') {
+      const val = String(U.getVal(sh, def.col, row) || '');
+      if (val === CONFIG.DEADLINE.VALUE_UNDECIDED) {
+        DL.createDeadlineIfNeeded(info, label, def);
+      }
+    }
+    // type: 'checkbox' の場合（写真納品・動画納品）
+    else if (def.type === 'checkbox' && def.chkCol) {
+      const colIdx = U.colOf(info.hs, def.chkCol);
+      const chkVal = sh.getRange(row, colIdx).getValue();
+      // チェックされていない場合のみ締切イベントを作成
+      if (chkVal !== true && String(chkVal).toLowerCase() !== 'true') {
+        DL.createDeadlineIfNeeded(info, label, def);
+      }
+    }
   });
 
   // ④ 顧客フォルダ／社内ページのリンクを説明欄に追記
