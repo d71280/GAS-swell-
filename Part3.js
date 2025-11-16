@@ -310,9 +310,42 @@ if (def.chkCol) {
 
 
 
+/* ================ インストール可能トリガーのセットアップ ================ */
+/**
+ * onEdit の自動更新を有効にするためのセットアップ関数
+ * 初回のみ実行してください（メニューから実行）
+ */
+function setupAutoUpdateTrigger() {
+  const ss = SpreadsheetApp.getActive();
+
+  // 既存の onEdit トリガーを全て削除
+  const triggers = ScriptApp.getUserTriggers(ss);
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'onEdit') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // 新しいインストール可能トリガーを作成
+  ScriptApp.newTrigger('onEdit')
+    .forSpreadsheet(ss)
+    .onEdit()
+    .create();
+
+  SpreadsheetApp.getUi().alert(
+    '✅ 自動更新トリガーをセットアップしました！\n\n' +
+    'これで M列・K列・O列の編集時に自動更新が動作します。\n' +
+    '※このセットアップは初回のみ実行すればOKです。'
+  );
+
+  console.log('✅ インストール可能トリガーをセットアップしました');
+}
+
 /* ================ メニュー ================ */
 function onOpen(){
   SpreadsheetApp.getUi().createMenu('📂 顧客管理メニュー')
+    .addItem('⚙️ 自動更新トリガーをセットアップ','setupAutoUpdateTrigger')
+    .addSeparator()
     .addItem('①新規予約の一括処理（選択行）','runNewBookingForSelectedRow_')
     .addItem('②既存データ更新（選択行）','runRefreshExistingForSelectedRow_')
     .addItem('③カレンダー同期（選択行）','runCalendarSyncForSelectedRow_')
