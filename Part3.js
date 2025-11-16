@@ -180,6 +180,31 @@ if (col === COL.PLAN_MAN) {
   return;
 }
 
+    // --- K列 / O列 変更時： Docs反映 + カレンダー同期 ---
+    if (col === COL.CAMERA || col === COL.LOC_FIX) {
+      const lock = LockService.getScriptLock();
+      try {
+        const hasLock = lock.tryLock(30000);
+        if (!hasLock) {
+          console.warn('⚠️ 既に処理中のため、この編集はスキップされました');
+          return;
+        }
+
+        const colName = col === COL.CAMERA ? 'K列（カメラマン）' : 'O列（撮影地確定）';
+        console.log(`📝 ${colName}変更: 既存データ更新 + カレンダー同期 (行${row})`);
+
+        refreshExistingForRow_(row);   // 社内用ページなど更新
+        calendarSyncForRow_(row);      // カレンダーも更新
+
+      } catch (err) {
+        console.error(`K/O列処理エラー (行${row}):`, err);
+        SpreadsheetApp.getActive().toast('⚠️ 処理中にエラーが発生しました');
+      } finally {
+        lock.releaseLock();
+      }
+      return;
+    }
+
   } catch(err){
     console.log('onEdit error', err);
   }
