@@ -101,6 +101,103 @@ Object.entries(next).forEach(([key, val]) => {
 
 }
 
+/* ================ ムービーヒアリング自動同期 ================ */
+/**
+ * ムービーヒアリングシート全体をチェックして、社内ページを更新
+ * 時間ベーストリガーで定期実行される
+ */
+function syncAllMovieHearings() {
+  console.log('🎥 ムービーヒアリング全件同期開始');
+
+  const hearingSheet = U.sh(CONFIG.SHEETS.HEARING);
+  const hearingData = hearingSheet.getDataRange().getValues();
+  const hearingHeaders = hearingData[0];
+
+  const groomIdx = hearingHeaders.indexOf('新郎名');
+  const brideIdx = hearingHeaders.indexOf('新婦名');
+
+  if (groomIdx === -1 || brideIdx === -1) {
+    console.error('❌ ムービーヒアリングシートに「新郎名」または「新婦名」列がありません');
+    return;
+  }
+
+  const mainSheet = U.sh(CONFIG.SHEETS.MAIN);
+  const mainData = mainSheet.getDataRange().getValues();
+  const mainHeaders = mainData[0];
+
+  const mainGroomIdx = mainHeaders.indexOf('新郎様お名前');
+  const mainBrideIdx = mainHeaders.indexOf('新婦様お名前');
+
+  if (mainGroomIdx === -1 || mainBrideIdx === -1) {
+    console.error('❌ 顧客管理シートに「新郎様お名前」または「新婦様お名前」列がありません');
+    return;
+  }
+
+  const normalize = (str) => String(str || '').replace(/[\s　]/g, '');
+  let updateCount = 0;
+
+  // ムービーヒアリングの各行をチェック
+  for (let i = 1; i < hearingData.length; i++) {
+    const hearingGroom = String(hearingData[i][groomIdx] || '').trim();
+    const hearingBride = String(hearingData[i][brideIdx] || '').trim();
+
+    if (!hearingGroom || !hearingBride) continue;
+
+    const targetGroomNorm = normalize(hearingGroom);
+    const targetBrideNorm = normalize(hearingBride);
+
+    // 一致する顧客を検索
+    for (let j = 1; j < mainData.length; j++) {
+      const mainGroom = normalize(mainData[j][mainGroomIdx]);
+      const mainBride = normalize(mainData[j][mainBrideIdx]);
+
+      if (mainGroom === targetGroomNorm && mainBride === targetBrideNorm) {
+        const matchedRow = j + 1;
+        try {
+          refreshExistingForRow_(matchedRow);
+          updateCount++;
+          console.log(`✅ 更新: 行${matchedRow} - ${hearingGroom} × ${hearingBride}`);
+        } catch (err) {
+          console.error(`❌ 更新エラー (行${matchedRow}):`, err);
+        }
+        break;
+      }
+    }
+  }
+
+  console.log(`🎥 同期完了: ${updateCount}件の社内ページを更新`);
+  return updateCount;
+}
+
+/**
+ * ムービーヒアリング自動同期の時間ベーストリガーをセットアップ
+ */
+function setupMovieHearingAutoSync() {
+  const ss = SpreadsheetApp.getActive();
+
+  // 既存の同期トリガーを削除
+  const triggers = ScriptApp.getUserTriggers(ss);
+  triggers.forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'syncAllMovieHearings') {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+
+  // 新しいトリガーを作成（10分ごと）
+  ScriptApp.newTrigger('syncAllMovieHearings')
+    .timeBased()
+    .everyMinutes(10)
+    .create();
+
+  SpreadsheetApp.getUi().alert(
+    '✅ ムービーヒアリング自動同期をセットアップしました！\n\n' +
+    '10分ごとに自動的にチェックして、社内ページを更新します。\n\n' +
+    '※このセットアップは初回のみ実行すればOKです。'
+  );
+
+  console.log('✅ ムービーヒアリング自動同期トリガー（10分間隔）をセットアップしました');
+}
+
 /* ================ ムービーヒアリング編集時の処理 ================ */
 /**
  * ムービーヒアリングシートが編集されたときに、対応する顧客の社内ページを自動更新
@@ -456,6 +553,7 @@ function setupAutoUpdateTrigger() {
 function onOpen(){
   SpreadsheetApp.getUi().createMenu('📂 顧客管理メニュー')
     .addItem('⚙️ 自動更新トリガーをセットアップ','setupAutoUpdateTrigger')
+    .addItem('🎥 ムービーヒアリング自動同期を有効化','setupMovieHearingAutoSync')
     .addSeparator()
     .addItem('①新規予約の一括処理（選択行）','runNewBookingForSelectedRow_')
     .addItem('②既存データ更新（選択行）','runRefreshExistingForSelectedRow_')
