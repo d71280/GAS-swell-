@@ -718,11 +718,71 @@ function setupAutoUpdateTrigger() {
   console.log('✅ インストール可能トリガーをセットアップしました');
 }
 
+/* ================ 自動フィルタ・ソート ================ */
+/**
+ * 顧客管理シートに自動フィルタを適用
+ * - 撮影日を新しい順（降順）にソート
+ * - 最終完了がTRUEの行を非表示
+ */
+function applyAutoFilter() {
+  try {
+    const sh = U.sh(CONFIG.SHEETS.MAIN);
+    const headers = U.getHeaders(sh);
+
+    // 列インデックスを取得
+    const photoColIdx = headers.indexOf(CONFIG.COLS.PHOTO) + 1; // 撮影日
+    const doneColIdx = headers.indexOf(CONFIG.COLS.DONE) + 1;   // 最終完了
+
+    if (photoColIdx === 0 || doneColIdx === 0) {
+      console.warn('⚠️ 撮影日または最終完了列が見つかりません');
+      return;
+    }
+
+    const lastRow = sh.getLastRow();
+    const lastCol = sh.getLastColumn();
+
+    if (lastRow <= 1) {
+      console.log('⏭️ データ行がないためフィルタをスキップ');
+      return;
+    }
+
+    // 既存のフィルタを削除
+    const existingFilter = sh.getFilter();
+    if (existingFilter) {
+      existingFilter.remove();
+    }
+
+    // 新しいフィルタを作成
+    const range = sh.getRange(1, 1, lastRow, lastCol);
+    const filter = range.createFilter();
+
+    // 最終完了列のフィルタ条件：TRUEを非表示
+    const doneCriteria = SpreadsheetApp.newFilterCriteria()
+      .whenCellNotEmpty()
+      .setHiddenValues(['TRUE', 'true', true])
+      .build();
+    filter.setColumnFilterCriteria(doneColIdx, doneCriteria);
+
+    // 撮影日列でソート：降順（新しい順）
+    filter.sort(photoColIdx, false); // false = descending
+
+    console.log('✅ フィルタ適用完了: 撮影日降順 + 完了済み非表示');
+
+  } catch (err) {
+    console.error('❌ フィルタ適用エラー:', err);
+  }
+}
+
 /* ================ メニュー ================ */
 function onOpen(){
+  // シートを開いたときに自動フィルタを適用
+  applyAutoFilter();
+
   SpreadsheetApp.getUi().createMenu('📂 顧客管理メニュー')
     .addItem('⚙️ 自動更新トリガーをセットアップ','setupAutoUpdateTrigger')
     .addItem('🎥 ムービーヒアリング自動同期を有効化','setupMovieHearingAutoSync')
+    .addSeparator()
+    .addItem('🔄 フィルタ・ソートを再適用','applyAutoFilter')
     .addSeparator()
     .addItem('①新規予約の一括処理（選択行）','runNewBookingForSelectedRow_')
     .addItem('②既存データ更新（選択行）','runRefreshExistingForSelectedRow_')
