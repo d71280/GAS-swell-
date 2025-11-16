@@ -540,17 +540,6 @@ function getOtherMemoForSection_(body, titleText) {
     bm = doc.addBookmark(doc.newPosition(titlePara, 0));
   }
 
-  // 🔄 同じ見出しにぶら下がる古いブックマークを削除
-  doc.getBookmarks().forEach(b => {
-    if (b.getId() === bm.getId()) return;
-    const el = b.getPosition().getElement();
-    if (!el || el.getType() !== DocumentApp.ElementType.PARAGRAPH) return;
-    if (el.asParagraph().getText().trim() === titleText) {
-      doc.removeBookmark(b);
-      console.log(`🧹 重複ブックマーク削除: ${titleText}`);
-    }
-  });
-
   // シートB列（社内用ページ）にブックマークリンク
   const colInternal = U.colOf(info.hs, CONFIG.COLS.INTERNAL_LINK);
   const linkUrl = `https://docs.google.com/document/d/${doc.getId()}/edit#bookmark=${bm.getId()}`;

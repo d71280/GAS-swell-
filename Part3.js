@@ -446,17 +446,6 @@ function refreshExistingForRow_(row) {
       bm = doc.addBookmark(doc.newPosition(titlePara, 0));
     }
 
-    // 同じ見出しにぶら下がっている古いブックマークを削除
-    doc.getBookmarks().forEach(b => {
-      if (b.getId() === bm.getId()) return;
-      const el = b.getPosition().getElement();
-      if (!el || el.getType() !== DocumentApp.ElementType.PARAGRAPH) return;
-      if (el.asParagraph().getText().trim() === titleText) {
-        doc.removeBookmark(b);
-        console.log(`🧹 重複ブックマーク削除: ${titleText}`);
-      }
-    });
-
     const colInternal = U.colOf(info.hs, CONFIG.COLS.INTERNAL_LINK);
     const linkUrl =
       `https://docs.google.com/document/d/${docId}/edit#bookmark=${bm.getId()}`;
