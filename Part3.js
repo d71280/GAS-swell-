@@ -101,6 +101,92 @@ Object.entries(next).forEach(([key, val]) => {
 
 }
 
+/* ================ ムービーヒアリング編集時の処理 ================ */
+/**
+ * ムービーヒアリングシートが編集されたときに、対応する顧客の社内ページを自動更新
+ */
+function handleHearingEdit_(hearingSheet, editedRow) {
+  console.log(`🎥 ムービーヒアリング編集検知: 行${editedRow}`);
+
+  // 編集された行の新郎・新婦名を取得
+  const hearingData = hearingSheet.getDataRange().getValues();
+  const hearingHeaders = hearingData[0];
+
+  const groomIdx = hearingHeaders.indexOf('新郎名');
+  const brideIdx = hearingHeaders.indexOf('新婦名');
+
+  if (groomIdx === -1 || brideIdx === -1) {
+    console.error('❌ ムービーヒアリングシートに「新郎名」または「新婦名」列がありません');
+    return;
+  }
+
+  const editedRowData = hearingData[editedRow - 1];
+  const hearingGroom = String(editedRowData[groomIdx] || '').trim();
+  const hearingBride = String(editedRowData[brideIdx] || '').trim();
+
+  if (!hearingGroom || !hearingBride) {
+    console.log('⏭️ 新郎・新婦名が空のためスキップ');
+    return;
+  }
+
+  console.log(`👰 検索: ${hearingGroom} × ${hearingBride}`);
+
+  // 顧客管理シートで一致する行を検索
+  const mainSheet = U.sh(CONFIG.SHEETS.MAIN);
+  const mainData = mainSheet.getDataRange().getValues();
+  const mainHeaders = mainData[0];
+
+  const mainGroomIdx = mainHeaders.indexOf('新郎様お名前');
+  const mainBrideIdx = mainHeaders.indexOf('新婦様お名前');
+
+  if (mainGroomIdx === -1 || mainBrideIdx === -1) {
+    console.error('❌ 顧客管理シートに「新郎様お名前」または「新婦様お名前」列がありません');
+    return;
+  }
+
+  // 名前の正規化（空白を削除して比較）
+  const normalize = (str) => String(str || '').replace(/[\s　]/g, '');
+  const targetGroomNorm = normalize(hearingGroom);
+  const targetBrideNorm = normalize(hearingBride);
+
+  // 一致する顧客を検索
+  for (let i = 1; i < mainData.length; i++) {
+    const mainGroom = normalize(mainData[i][mainGroomIdx]);
+    const mainBride = normalize(mainData[i][mainBrideIdx]);
+
+    if (mainGroom === targetGroomNorm && mainBride === targetBrideNorm) {
+      const matchedRow = i + 1;
+      console.log(`✅ 一致: 行${matchedRow} - ${hearingGroom} × ${hearingBride}`);
+
+      try {
+        // 社内ページを自動更新
+        refreshExistingForRow_(matchedRow);
+        console.log(`🔄 社内ページ更新完了: 行${matchedRow}`);
+        SpreadsheetApp.getActive().toast(
+          `🎥 ムービーヒアリング情報を社内ページに反映しました\n${hearingGroom} × ${hearingBride}`,
+          '自動更新完了',
+          5
+        );
+      } catch (err) {
+        console.error(`❌ 更新エラー (行${matchedRow}):`, err);
+        SpreadsheetApp.getActive().toast(
+          `⚠️ 社内ページの更新に失敗しました: ${err.message}`,
+          'エラー',
+          5
+        );
+      }
+      return;
+    }
+  }
+
+  console.warn(`⚠️ 一致する顧客が見つかりません: ${hearingGroom} × ${hearingBride}`);
+  SpreadsheetApp.getActive().toast(
+    `⚠️ 顧客管理シートに一致する顧客が見つかりませんでした\n${hearingGroom} × ${hearingBride}`,
+    'ムービーヒアリング',
+    5
+  );
+}
+
 /* ================ onEdit：列番号固定版 ================ */
 /**
  * インストール可能トリガーで実行される onEdit ハンドラー
@@ -111,11 +197,21 @@ function onEditHandler(e){
     if (!e || !e.range) return;
 
     const sh = e.range.getSheet();
-    if (!sh || sh.getName() !== CONFIG.SHEETS.MAIN) return;
+    if (!sh) return;
 
+    const sheetName = sh.getName();
     const row = e.range.getRow();
     const col = e.range.getColumn();
     if (row <= 1) return; // 見出し行は無視
+
+    // ========== ムービーヒアリングシート編集時の処理 ==========
+    if (sheetName === CONFIG.SHEETS.HEARING) {
+      handleHearingEdit_(sh, row);
+      return;
+    }
+
+    // ========== 顧客管理シート編集時の処理 ==========
+    if (sheetName !== CONFIG.SHEETS.MAIN) return;
 
     // 列番号（現行のシート構成前提）
     const COL = {
