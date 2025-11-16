@@ -301,8 +301,9 @@ function onOpen(){
     .addSeparator()
     .addItem('④スケジュール生成＋案内状/社内ページ反映','runScheduleApplyForSelectedRow_')
     .addSeparator()
-    // 🆕 以下を追加
     .addItem('⑤請求書PDF化（選択行）','runExportInvoiceForSelectedRow_')
+    .addSeparator()
+    .addItem('🔍 カレンダー削除テスト（選択行）','testCalendarDelete')
     .addToUi();
 }
 
