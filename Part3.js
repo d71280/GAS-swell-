@@ -102,7 +102,11 @@ Object.entries(next).forEach(([key, val]) => {
 }
 
 /* ================ onEdit：列番号固定版 ================ */
-function onEdit(e){
+/**
+ * インストール可能トリガーで実行される onEdit ハンドラー
+ * シンプルトリガーとの重複を避けるため、関数名を変更
+ */
+function onEditHandler(e){
   try{
     if (!e || !e.range) return;
 
@@ -318,16 +322,16 @@ if (def.chkCol) {
 function setupAutoUpdateTrigger() {
   const ss = SpreadsheetApp.getActive();
 
-  // 既存の onEdit トリガーを全て削除
+  // 既存の onEditHandler トリガーを全て削除
   const triggers = ScriptApp.getUserTriggers(ss);
   triggers.forEach(trigger => {
-    if (trigger.getHandlerFunction() === 'onEdit') {
+    if (trigger.getHandlerFunction() === 'onEditHandler') {
       ScriptApp.deleteTrigger(trigger);
     }
   });
 
   // 新しいインストール可能トリガーを作成
-  ScriptApp.newTrigger('onEdit')
+  ScriptApp.newTrigger('onEditHandler')
     .forSpreadsheet(ss)
     .onEdit()
     .create();
