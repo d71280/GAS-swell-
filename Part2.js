@@ -90,20 +90,62 @@ const DriveX = {
     const normalizedNewName = DriveX.normalizeName(newName);
 
     // 既存ファイルを全て取得して、正規化した名前で比較
+    const existingFiles = [];
     const files = folder.getFiles();
     while(files.hasNext()){
       const existingFile = files.next();
       const existingName = DriveX.normalizeName(existingFile.getName());
       if(existingName === normalizedNewName){
-        console.log(`既存ファイルを使用: ${existingFile.getName()}`);
-        return existingFile;
+        existingFiles.push(existingFile);
       }
+    }
+
+    // 既存ファイルが1つ以上ある場合
+    if(existingFiles.length > 0){
+      console.log(`既存ファイルを使用: ${existingFiles[0].getName()} (${existingFiles.length}件)`);
+
+      // 重複がある場合は古いものを削除（最新のものだけ残す）
+      if(existingFiles.length > 1){
+        console.warn(`⚠️ 重複ファイル検出: ${normalizedNewName} (${existingFiles.length}件)`);
+        // 更新日時でソート（新しい順）
+        existingFiles.sort((a, b) => b.getLastUpdated().getTime() - a.getLastUpdated().getTime());
+        // 最新以外を削除
+        for(let i = 1; i < existingFiles.length; i++){
+          console.log(`🗑️ 重複ファイル削除: ${existingFiles[i].getName()}`);
+          existingFiles[i].setTrashed(true);
+        }
+      }
+
+      return existingFiles[0];
     }
 
     // 既存ファイルがなければ新規作成
     const src=DriveApp.getFileById(templateId);
     console.log(`新規ファイル作成: ${normalizedNewName}`);
-    return src.makeCopy(normalizedNewName,folder);
+    const newFile = src.makeCopy(normalizedNewName,folder);
+
+    // 作成後、再度重複チェック（同時実行で重複が発生した場合の対策）
+    Utilities.sleep(100); // 100ms待機
+    const filesAfter = folder.getFiles();
+    const duplicates = [];
+    while(filesAfter.hasNext()){
+      const f = filesAfter.next();
+      if(DriveX.normalizeName(f.getName()) === normalizedNewName && f.getId() !== newFile.getId()){
+        duplicates.push(f);
+      }
+    }
+
+    if(duplicates.length > 0){
+      console.warn(`⚠️ 作成後に重複検出: ${duplicates.length}件 → 古いファイルを削除`);
+      duplicates.forEach(d => {
+        if(d.getLastUpdated().getTime() < newFile.getLastUpdated().getTime()){
+          console.log(`🗑️ 古い重複ファイル削除: ${d.getName()}`);
+          d.setTrashed(true);
+        }
+      });
+    }
+
+    return newFile;
   }
 };
 

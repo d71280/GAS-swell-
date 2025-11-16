@@ -123,6 +123,20 @@ function onEdit(e){
       INTERNAL:   2  // B列 社内用ページ
     };
 
+    // === 連続実行防止：同じセルを1秒以内に編集した場合はスキップ ===
+    const cellKey = `${sh.getName()}_${row}_${col}`;
+    const props = PropertiesService.getScriptProperties();
+    const lastEditKey = `lastEdit_${cellKey}`;
+    const lastEditTime = props.getProperty(lastEditKey);
+    const now = new Date().getTime();
+
+    if (lastEditTime && (now - Number(lastEditTime)) < 1000) {
+      console.warn(`⚠️ 連続実行防止: ${cellKey} は1秒以内に編集されたためスキップ`);
+      return;
+    }
+
+    props.setProperty(lastEditKey, String(now));
+
     // --- L / M列の変更時は P〜V列を自動反映 ---
     if (col === COL.PLAN_AUTO || col === COL.PLAN_MAN) {
       updateFeaturesRow(row);
@@ -584,5 +598,49 @@ function runScheduleApplyForSelectedRow_(){
     DL.refreshShootEventDescription(info);
   });
   SpreadsheetApp.getActive().toast('📋 スケジュール・案内状反映を更新しました');
+}
+
+// ===== テスト用：カレンダー削除のデバッグ関数 =====
+function testCalendarDelete() {
+  const sh = U.sh(CONFIG.SHEETS.MAIN);
+  const row = sh.getActiveRange().getRow();
+  if (row <= 1) {
+    SpreadsheetApp.getUi().alert('データ行を選択してください');
+    return;
+  }
+
+  const info = readRowInfo(row);
+
+  Logger.log('=== カレンダー削除テスト開始 ===');
+  Logger.log(`行: ${row}`);
+  Logger.log(`新郎: ${info.groom}`);
+  Logger.log(`新婦: ${info.bride}`);
+  Logger.log(`撮影日: ${info.photoDate}`);
+  Logger.log(`撮影地: ${info.location}`);
+
+  if (!info.groom || !info.bride) {
+    Logger.log('❌ 新郎・新婦名が空です');
+    SpreadsheetApp.getUi().alert('新郎・新婦名が空です');
+    return;
+  }
+
+  if (!info.photoDate) {
+    Logger.log('❌ 撮影日が空です');
+    SpreadsheetApp.getUi().alert('撮影日が空です');
+    return;
+  }
+
+  try {
+    const summary = DL.clearAllEventsFor(info);
+    Logger.log('✅ 削除結果: ' + JSON.stringify(summary));
+
+    const totalDeleted = summary.reduce((sum, s) => sum + s.deleted, 0);
+    const msg = `削除完了: ${totalDeleted}件のイベントを削除しました\n詳細はログを確認してください`;
+    SpreadsheetApp.getUi().alert(msg);
+    Logger.log(msg);
+  } catch (err) {
+    Logger.log('❌ エラー: ' + err.message);
+    SpreadsheetApp.getUi().alert('エラー: ' + err.message);
+  }
 }
 
