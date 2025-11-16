@@ -721,7 +721,7 @@ function setupAutoUpdateTrigger() {
 /* ================ 自動フィルタ・ソート ================ */
 /**
  * 顧客管理シートに自動フィルタを適用
- * - 撮影日を新しい順（降順）にソート
+ * - 撮影日を近い順（昇順）にソート
  * - 最終完了がTRUEの行を非表示
  */
 function applyAutoFilter() {
@@ -763,10 +763,10 @@ function applyAutoFilter() {
       .build();
     filter.setColumnFilterCriteria(doneColIdx, doneCriteria);
 
-    // 撮影日列でソート：降順（新しい順）
-    filter.sort(photoColIdx, false); // false = descending
+    // 撮影日列でソート：昇順（近い順）
+    filter.sort(photoColIdx, true); // true = ascending
 
-    console.log('✅ フィルタ適用完了: 撮影日降順 + 完了済み非表示');
+    console.log('✅ フィルタ適用完了: 撮影日昇順（近い順） + 完了済み非表示');
 
   } catch (err) {
     console.error('❌ フィルタ適用エラー:', err);
