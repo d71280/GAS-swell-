@@ -133,17 +133,22 @@ if (col === COL.PLAN_MAN) {
   // ロック取得（最大30秒待機）
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
-    
+    // ロック取得を試みる（30秒待機）
+    const hasLock = lock.tryLock(30000);
+    if (!hasLock) {
+      console.warn('⚠️ 既に処理中のため、この編集はスキップされました');
+      return;
+    }
+
     const info = readRowInfo(row);
     const parentFolderId = Settings.read().parentFolderId;
     const parent = DriveApp.getFolderById(parentFolderId);
     const folderName = `${info.groom} × ${info.bride}　様`;
-    
+
     // フォルダの実在チェック
     const existingFolder = parent.getFoldersByName(folderName);
     const folderExists = existingFolder.hasNext();
-    
+
     const hasA = !!sh.getRange(row, COL.LINK).getDisplayValue();
     const hasB = !!sh.getRange(row, COL.INTERNAL).getDisplayValue();
 
@@ -154,7 +159,7 @@ if (col === COL.PLAN_MAN) {
     }
 
     calendarSyncForRow_(row);
-    
+
   } catch (err) {
     console.error('M列処理エラー:', err);
     SpreadsheetApp.getActive().toast('⚠️ 処理中にエラーが発生しました');

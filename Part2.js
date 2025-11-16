@@ -81,11 +81,29 @@ const DriveX = {
     const it=parent.getFoldersByName(name);
     return it.hasNext()?it.next():parent.createFolder(name);
   },
+  // ファイル名を正規化（連続する空白を1つに統一）
+  normalizeName(name){
+    return String(name).replace(/\s+/g, ' ').trim();
+  },
   copyIfMissing(folder,templateId,newName){
-    const f=folder.getFilesByName(newName);
-    if(f.hasNext())return f.next();
+    // ファイル名を正規化
+    const normalizedNewName = DriveX.normalizeName(newName);
+
+    // 既存ファイルを全て取得して、正規化した名前で比較
+    const files = folder.getFiles();
+    while(files.hasNext()){
+      const existingFile = files.next();
+      const existingName = DriveX.normalizeName(existingFile.getName());
+      if(existingName === normalizedNewName){
+        console.log(`既存ファイルを使用: ${existingFile.getName()}`);
+        return existingFile;
+      }
+    }
+
+    // 既存ファイルがなければ新規作成
     const src=DriveApp.getFileById(templateId);
-    return src.makeCopy(newName,folder);
+    console.log(`新規ファイル作成: ${normalizedNewName}`);
+    return src.makeCopy(normalizedNewName,folder);
   }
 };
 
@@ -217,6 +235,9 @@ function buildCommonPairs(info){
 
   const inv = buildInvoiceRows_(info.planAuto, manualItems);
 
+  // プラン手動が「なし」だけの場合は空文字列にする
+  const planManDisplay = manualItems.length > 0 ? info.planMan : '';
+
   const pairs = {
     '{{新郎名}}': info.groom,
     '{{新婦名}}': info.bride,
@@ -227,8 +248,8 @@ function buildCommonPairs(info){
     '{{カメラマン}}': info.camera,
     '{{プラン自動}}': info.planAuto,
     '{{プラン（自動）}}': info.planAuto,
-    '{{プラン手動}}': info.planMan,
-    '{{プラン（手動）}}': info.planMan,
+    '{{プラン手動}}': planManDisplay,
+    '{{プラン（手動）}}': planManDisplay,
     '{{今日}}': Utilities.formatDate(issue, CONFIG.TZ, 'yyyy年MM月dd日'),
     '{{発行日}}': U.fmt(issue),
     '{{お支払い期限}}': U.fmt(due),
