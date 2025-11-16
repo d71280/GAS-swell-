@@ -601,14 +601,17 @@ function runScheduleApplyForSelectedRow_(){
 function testCalendarDelete() {
   const sh = U.sh(CONFIG.SHEETS.MAIN);
   const row = sh.getActiveRange().getRow();
+
+  Logger.log('=== カレンダー削除テスト開始 ===');
+
   if (row <= 1) {
-    SpreadsheetApp.getUi().alert('データ行を選択してください');
+    Logger.log('❌ データ行を選択してください');
+    console.error('データ行を選択してください');
     return;
   }
 
   const info = readRowInfo(row);
 
-  Logger.log('=== カレンダー削除テスト開始 ===');
   Logger.log(`行: ${row}`);
   Logger.log(`新郎: ${info.groom}`);
   Logger.log(`新婦: ${info.bride}`);
@@ -617,13 +620,13 @@ function testCalendarDelete() {
 
   if (!info.groom || !info.bride) {
     Logger.log('❌ 新郎・新婦名が空です');
-    SpreadsheetApp.getUi().alert('新郎・新婦名が空です');
+    console.error('新郎・新婦名が空です');
     return;
   }
 
   if (!info.photoDate) {
     Logger.log('❌ 撮影日が空です');
-    SpreadsheetApp.getUi().alert('撮影日が空です');
+    console.error('撮影日が空です');
     return;
   }
 
@@ -632,12 +635,27 @@ function testCalendarDelete() {
     Logger.log('✅ 削除結果: ' + JSON.stringify(summary));
 
     const totalDeleted = summary.reduce((sum, s) => sum + s.deleted, 0);
-    const msg = `削除完了: ${totalDeleted}件のイベントを削除しました\n詳細はログを確認してください`;
-    SpreadsheetApp.getUi().alert(msg);
+    const msg = `✅ 削除完了: ${totalDeleted}件のイベントを削除しました`;
     Logger.log(msg);
+    console.log(msg);
+
+    // UIが利用可能な場合のみアラート表示
+    try {
+      SpreadsheetApp.getUi().alert(msg + '\n詳細はログを確認してください');
+    } catch (e) {
+      // UIが利用できない場合は無視
+    }
   } catch (err) {
-    Logger.log('❌ エラー: ' + err.message);
-    SpreadsheetApp.getUi().alert('エラー: ' + err.message);
+    const errMsg = '❌ エラー: ' + err.message;
+    Logger.log(errMsg);
+    console.error(errMsg);
+
+    // UIが利用可能な場合のみアラート表示
+    try {
+      SpreadsheetApp.getUi().alert(errMsg);
+    } catch (e) {
+      // UIが利用できない場合は無視
+    }
   }
 }
 
