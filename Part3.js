@@ -201,6 +201,30 @@ function updateInternalPageOnly_(row, hearingData) {
 }
 
 /**
+ * 回答者名から名前部分を抽出（日付・場所より前）
+ * 例: "櫻井真優 11/8 城ヶ島" → "櫻井真優"
+ */
+function extractNameFromRespondent_(respondentName) {
+  if (!respondentName) return '';
+
+  const str = String(respondentName).trim();
+
+  // スペース、数字、日付パターンより前の部分を抽出
+  const match = str.match(/^([^\s\d]+)/);
+  if (match) {
+    return match[1].trim();
+  }
+
+  // マッチしない場合は最初のスペースまで
+  const spaceIdx = str.indexOf(' ');
+  if (spaceIdx > 0) {
+    return str.substring(0, spaceIdx).trim();
+  }
+
+  return str;
+}
+
+/**
  * ムービーヒアリングシート全体をチェックして、社内ページを更新
  * 時間ベーストリガーで定期実行される（変更検出＋軽量更新）
  */
@@ -211,11 +235,11 @@ function syncAllMovieHearings() {
   const hearingData = hearingSheet.getDataRange().getValues();
   const hearingHeaders = hearingData[0];
 
-  const groomIdx = hearingHeaders.indexOf('新郎名');
-  const brideIdx = hearingHeaders.indexOf('新婦名');
+  // 回答者名 列を探す
+  const respondentIdx = hearingHeaders.indexOf('回答者名');
 
-  if (groomIdx === -1 || brideIdx === -1) {
-    console.error('❌ ムービーヒアリングシートに「新郎名」または「新婦名」列がありません');
+  if (respondentIdx === -1) {
+    console.error('❌ ムービーヒアリングシートに「回答者名」列がありません');
     return;
   }
 
@@ -238,13 +262,19 @@ function syncAllMovieHearings() {
 
   // ムービーヒアリングの各行をチェック
   for (let i = 1; i < hearingData.length; i++) {
-    const hearingGroom = String(hearingData[i][groomIdx] || '').trim();
-    const hearingBride = String(hearingData[i][brideIdx] || '').trim();
+    const respondentName = String(hearingData[i][respondentIdx] || '').trim();
 
-    if (!hearingGroom || !hearingBride) continue;
+    if (!respondentName) continue;
 
-    const targetGroomNorm = normalize(hearingGroom);
-    const targetBrideNorm = normalize(hearingBride);
+    // 回答者名から名前部分を抽出（例: "櫻井真優 11/8 城ヶ島" → "櫻井真優"）
+    const extractedName = extractNameFromRespondent_(respondentName);
+
+    if (!extractedName) {
+      console.warn(`⚠️ 名前抽出失敗: ${respondentName}`);
+      continue;
+    }
+
+    const targetNameNorm = normalize(extractedName);
 
     // データのハッシュ値を計算（変更検出用）
     const rowDataStr = JSON.stringify(hearingData[i]);
@@ -254,7 +284,7 @@ function syncAllMovieHearings() {
       Utilities.Charset.UTF_8
     ).map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 
-    const hashKey = `hearing_hash_${targetGroomNorm}_${targetBrideNorm}`;
+    const hashKey = `hearing_hash_${targetNameNorm}`;
     const lastHash = props.getProperty(hashKey);
 
     // 変更がない場合はスキップ
@@ -263,13 +293,17 @@ function syncAllMovieHearings() {
       continue;
     }
 
-    // 一致する顧客を検索
+    // 一致する顧客を検索（新郎名 OR 新婦名で照合）
     for (let j = 1; j < mainData.length; j++) {
       const mainGroom = normalize(mainData[j][mainGroomIdx]);
       const mainBride = normalize(mainData[j][mainBrideIdx]);
 
-      if (mainGroom === targetGroomNorm && mainBride === targetBrideNorm) {
+      // 新郎名または新婦名のどちらかに一致
+      if (mainGroom === targetNameNorm || mainBride === targetNameNorm) {
         const matchedRow = j + 1;
+        const groomDisplay = mainData[j][mainGroomIdx];
+        const brideDisplay = mainData[j][mainBrideIdx];
+
         try {
           // 軽量更新：社内ページのみ
           updateInternalPageOnly_(matchedRow, [hearingHeaders, hearingData[i]]);
@@ -278,7 +312,7 @@ function syncAllMovieHearings() {
           props.setProperty(hashKey, currentHash);
 
           updateCount++;
-          console.log(`✅ 更新: 行${matchedRow} - ${hearingGroom} × ${hearingBride}`);
+          console.log(`✅ 更新: 行${matchedRow} - ${groomDisplay} × ${brideDisplay} (照合: ${extractedName} 元: ${respondentName})`);
         } catch (err) {
           console.error(`❌ 更新エラー (行${matchedRow}):`, err);
         }
