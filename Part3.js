@@ -595,17 +595,25 @@ function calendarSyncForRow_(row) {
     // type: 'undecided' の場合
     if (def.type === 'undecided') {
       const val = String(U.getVal(sh, def.col, row) || '');
+      console.log(`📋 ${label}: 列${def.col} = "${val}"`);
       if (val === CONFIG.DEADLINE.VALUE_UNDECIDED) {
         DL.createDeadlineIfNeeded(info, label, def);
+        console.log(`  ✅ 締切イベント作成: ${label}`);
+      } else {
+        console.log(`  ⏭️ スキップ（値が"未決定"ではない）`);
       }
     }
     // type: 'checkbox' の場合（写真納品・動画納品）
     else if (def.type === 'checkbox' && def.chkCol) {
-      const colIdx = U.colOf(info.hs, def.chkCol);
-      const chkVal = sh.getRange(row, colIdx).getValue();
+      // 列記号を使って直接値を取得
+      const chkVal = U.getVal(sh, def.chkCol, row);
+      console.log(`📋 ${label}: 列${def.chkCol} = ${chkVal}`);
       // チェックされていない場合のみ締切イベントを作成
       if (chkVal !== true && String(chkVal).toLowerCase() !== 'true') {
         DL.createDeadlineIfNeeded(info, label, def);
+        console.log(`  ✅ 締切イベント作成: ${label}`);
+      } else {
+        console.log(`  ⏭️ スキップ（チェック済み）`);
       }
     }
   });
