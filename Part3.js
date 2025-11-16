@@ -141,6 +141,15 @@ function onEditHandler(e){
 
     props.setProperty(lastEditKey, String(now));
 
+    // --- 顧客名チェック：新郎・新婦名が空の場合は処理をスキップ ---
+    const groomCell = sh.getRange(row, 5).getDisplayValue().trim(); // E列：新郎
+    const brideCell = sh.getRange(row, 4).getDisplayValue().trim(); // D列：新婦
+
+    if (!groomCell || !brideCell) {
+      console.log(`⏭️ 顧客名が空のためスキップ (行${row})`);
+      return;
+    }
+
     // --- L / M列の変更時は P〜V列を自動反映 ---
     if (col === COL.PLAN_AUTO || col === COL.PLAN_MAN) {
       updateFeaturesRow(row);
