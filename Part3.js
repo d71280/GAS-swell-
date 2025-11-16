@@ -781,7 +781,7 @@ function refreshExistingForRow_(row) {
   set.templateIds.forEach(tid => {
     const src  = DriveApp.getFileById(tid);
     const base = detectBaseTitle(src.getName());
-    const newName = `${base}_${info.groom}${info.bride}`;
+    const newName = `${base}_${info.groom} × ${info.bride}　様`;
     const f = src.makeCopy(newName, folder);
     applyPairsByMime(f, buildCommonPairs(info));
     console.log(`📄 再生成: ${f.getName()}`);
