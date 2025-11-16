@@ -142,7 +142,7 @@ function onEdit(e){
       updateFeaturesRow(row);
     }
 
-// --- M列（プラン手動）変更時：Docs/フォルダ & カレンダー同期 ---
+// --- M列（プラン手動）変更時：既存データ更新 & カレンダー同期のみ ---
 if (col === COL.PLAN_MAN) {
   // ロック取得（最大30秒待機）
   const lock = LockService.getScriptLock();
@@ -155,24 +155,21 @@ if (col === COL.PLAN_MAN) {
     }
 
     const info = readRowInfo(row);
-    const parentFolderId = Settings.read().parentFolderId;
-    const parent = DriveApp.getFolderById(parentFolderId);
-    const folderName = `${info.groom} × ${info.bride}　様`;
-
-    // フォルダの実在チェック
-    const existingFolder = parent.getFoldersByName(folderName);
-    const folderExists = existingFolder.hasNext();
-
     const hasA = !!sh.getRange(row, COL.LINK).getDisplayValue();
     const hasB = !!sh.getRange(row, COL.INTERNAL).getDisplayValue();
 
-    if (folderExists || hasA || hasB) {
+    // A列またはB列にリンクがある場合のみ、既存データを更新
+    if (hasA || hasB) {
+      console.log(`📝 M列変更: 既存データ更新 (行${row})`);
       refreshExistingForRow_(row);
+      calendarSyncForRow_(row);
     } else {
-      createOrUpdateClientFiles(row, { refreshOnly: false });
+      // リンクがない場合は、カレンダー同期のみ実行
+      // 新規作成はメニュー「①新規予約の一括処理」から実行してください
+      console.warn(`⚠️ M列変更: リンク未設定のためカレンダー同期のみ実行 (行${row})`);
+      console.warn('💡 新規作成はメニュー「①新規予約の一括処理」から実行してください');
+      calendarSyncForRow_(row);
     }
-
-    calendarSyncForRow_(row);
 
   } catch (err) {
     console.error('M列処理エラー:', err);
