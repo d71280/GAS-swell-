@@ -102,9 +102,107 @@ Object.entries(next).forEach(([key, val]) => {
 }
 
 /* ================ ムービーヒアリング自動同期 ================ */
+
+/**
+ * 社内ページのムービーヒアリング情報のみを更新（軽量版）
+ * 顧客フォルダのファイルは触らない
+ */
+function updateInternalPageOnly_(row, hearingData) {
+  const info = readRowInfo(row, { includePrice: false });
+  const set = Settings.read();
+
+  if (!set.internalDocId) {
+    console.warn('⚠️ 社内用ドキュメントIDが設定されていません');
+    return;
+  }
+
+  const doc = DocumentApp.openById(set.internalDocId);
+  const body = doc.getBody();
+  const titleText = `📸 ${info.groom} × ${info.bride}　様`;
+
+  // 見出しを検索
+  const titlePara = body.getParagraphs().find(p => p.getText().trim() === titleText);
+  if (!titlePara) {
+    console.warn(`⚠️ 社内ページに見出しが見つかりません: ${titleText}`);
+    return;
+  }
+
+  // ムービーヒアリング情報のセクションを削除して再作成
+  const startIdx = body.getChildIndex(titlePara);
+  let deleteEnd = body.getNumChildren();
+
+  // 次の見出し（📸）を探す
+  for (let i = startIdx + 1; i < body.getNumChildren(); i++) {
+    const child = body.getChild(i);
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH &&
+        child.asParagraph().getText().trim().startsWith('📸 ')) {
+      deleteEnd = i;
+      break;
+    }
+  }
+
+  // 既存のムービーヒアリング見出しを削除
+  for (let i = deleteEnd - 1; i > startIdx; i--) {
+    const child = body.getChild(i);
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      const text = child.asParagraph().getText().trim();
+      if (text === '🎥 ムービーヒアリング情報') {
+        // この見出しから次のセクションまでを削除
+        let endDelete = i + 1;
+        for (let j = i + 1; j < deleteEnd; j++) {
+          const c = body.getChild(j);
+          if (c.getType() === DocumentApp.ElementType.PARAGRAPH &&
+              (c.asParagraph().getText().trim().startsWith('📋') ||
+               c.asParagraph().getText().trim().startsWith('🗓'))) {
+            endDelete = j;
+            break;
+          }
+        }
+
+        // 逆順で削除
+        for (let k = endDelete - 1; k >= i; k--) {
+          try {
+            body.removeChild(body.getChild(k));
+          } catch (e) {
+            console.log('削除スキップ:', e);
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // ムービーヒアリング情報があれば追加
+  if (hearingData && hearingData.length > 0) {
+    const hHeaders = hearingData[0];
+    const hRow = hearingData[1]; // データは2行目（1行目はヘッダー）
+
+    // 🗓 社内スケジュールの前に挿入
+    let insertIdx = body.getNumChildren() - 1;
+    for (let i = startIdx + 1; i < body.getNumChildren(); i++) {
+      const child = body.getChild(i);
+      if (child.getType() === DocumentApp.ElementType.PARAGRAPH &&
+          child.asParagraph().getText().trim() === '🗓 社内スケジュール') {
+        insertIdx = i;
+        break;
+      }
+    }
+
+    body.insertParagraph(insertIdx, '🎥 ムービーヒアリング情報')
+      .setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+    const hTable = [['項目', '内容']];
+    hHeaders.forEach((h, idx) => hTable.push([h, hRow[idx] ?? '']));
+    insertTableAt_(body, insertIdx + 1, hTable);
+  }
+
+  doc.saveAndClose();
+  console.log(`📝 社内ページ更新完了（軽量）: ${info.groom} × ${info.bride}`);
+}
+
 /**
  * ムービーヒアリングシート全体をチェックして、社内ページを更新
- * 時間ベーストリガーで定期実行される
+ * 時間ベーストリガーで定期実行される（変更検出＋軽量更新）
  */
 function syncAllMovieHearings() {
   console.log('🎥 ムービーヒアリング全件同期開始');
@@ -134,7 +232,9 @@ function syncAllMovieHearings() {
   }
 
   const normalize = (str) => String(str || '').replace(/[\s　]/g, '');
+  const props = PropertiesService.getScriptProperties();
   let updateCount = 0;
+  let skipCount = 0;
 
   // ムービーヒアリングの各行をチェック
   for (let i = 1; i < hearingData.length; i++) {
@@ -146,6 +246,23 @@ function syncAllMovieHearings() {
     const targetGroomNorm = normalize(hearingGroom);
     const targetBrideNorm = normalize(hearingBride);
 
+    // データのハッシュ値を計算（変更検出用）
+    const rowDataStr = JSON.stringify(hearingData[i]);
+    const currentHash = Utilities.computeDigest(
+      Utilities.DigestAlgorithm.MD5,
+      rowDataStr,
+      Utilities.Charset.UTF_8
+    ).map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
+
+    const hashKey = `hearing_hash_${targetGroomNorm}_${targetBrideNorm}`;
+    const lastHash = props.getProperty(hashKey);
+
+    // 変更がない場合はスキップ
+    if (lastHash === currentHash) {
+      skipCount++;
+      continue;
+    }
+
     // 一致する顧客を検索
     for (let j = 1; j < mainData.length; j++) {
       const mainGroom = normalize(mainData[j][mainGroomIdx]);
@@ -154,7 +271,12 @@ function syncAllMovieHearings() {
       if (mainGroom === targetGroomNorm && mainBride === targetBrideNorm) {
         const matchedRow = j + 1;
         try {
-          refreshExistingForRow_(matchedRow);
+          // 軽量更新：社内ページのみ
+          updateInternalPageOnly_(matchedRow, [hearingHeaders, hearingData[i]]);
+
+          // ハッシュ値を保存
+          props.setProperty(hashKey, currentHash);
+
           updateCount++;
           console.log(`✅ 更新: 行${matchedRow} - ${hearingGroom} × ${hearingBride}`);
         } catch (err) {
@@ -165,8 +287,8 @@ function syncAllMovieHearings() {
     }
   }
 
-  console.log(`🎥 同期完了: ${updateCount}件の社内ページを更新`);
-  return updateCount;
+  console.log(`🎥 同期完了: ${updateCount}件更新, ${skipCount}件スキップ（変更なし）`);
+  return { updated: updateCount, skipped: skipCount };
 }
 
 /**
