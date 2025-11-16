@@ -322,11 +322,13 @@ if (def.chkCol) {
 function setupAutoUpdateTrigger() {
   const ss = SpreadsheetApp.getActive();
 
-  // 既存の onEditHandler トリガーを全て削除
+  // 既存の onEdit / onEditHandler トリガーを全て削除
   const triggers = ScriptApp.getUserTriggers(ss);
   triggers.forEach(trigger => {
-    if (trigger.getHandlerFunction() === 'onEditHandler') {
+    const funcName = trigger.getHandlerFunction();
+    if (funcName === 'onEdit' || funcName === 'onEditHandler') {
       ScriptApp.deleteTrigger(trigger);
+      console.log(`🗑️ 古いトリガー削除: ${funcName}`);
     }
   });
 
@@ -338,8 +340,8 @@ function setupAutoUpdateTrigger() {
 
   SpreadsheetApp.getUi().alert(
     '✅ 自動更新トリガーをセットアップしました！\n\n' +
-    'これで M列・K列・O列の編集時に自動更新が動作します。\n' +
-    '※このセットアップは初回のみ実行すればOKです。'
+    '古い onEdit トリガーを削除し、新しい onEditHandler トリガーを作成しました。\n' +
+    'これで M列・K列・O列の編集時に自動更新が動作します。'
   );
 
   console.log('✅ インストール可能トリガーをセットアップしました');
