@@ -423,9 +423,6 @@ function refreshExistingForRow_(row) {
       tableData.push(["その他", otherMemo || ""]);
     }
 
-    // 社内スケジュール行（テンプレ）
-    tableData.push(["社内スケジュール", "{{社内スケジュール}}"]);
-
     // 顧客管理テーブル挿入
     insertTableAt_(body, insertAt, tableData);
 
