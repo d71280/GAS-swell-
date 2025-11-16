@@ -40,8 +40,8 @@ GROOM: '新郎様お名前',
   },
   FEATURE_HEADERS: ['ヘアメイク','サロン','スケジュール','ドレス','ブーケ','タキシード','プロフィール'],
   DEADLINE: {
-     CALENDAR_ID_SHOOT: 'c_db085b08ac1ca83a0bb99674620e263339e81999c7f4ffb4de0d190e8369858f@group.calendar.google.com',   // 📸 撮影用
-  CALENDAR_ID_DEADLINE: 'c_9c2aa6354b2d7955a57aedb7c7490339c25237ddbc6ce182cfbd6c56ffa5c42b@group.calendar.google.com', // ⏰ 締切用
+     CALENDAR_ID_SHOOT: 'c_30eced30855b030a33a1fb1c15a6ec9e6561e07379c7401f060b8d045181a7c7@group.calendar.google.com',   // 📸 撮影用
+  CALENDAR_ID_DEADLINE: 'c_303e5a1b73d09f4636b4b2211aba3d782012df703e228abe06fbdbb086330c46@group.calendar.google.com', // ⏰ 締切用
     CHAT_WEBHOOK: 'https://chat.googleapis.com/v1/spaces/AAQARnwfhmQ/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=1SibxR4B0U6F50iyPlV3qBolb7tEoBNFmQ6MIGPzp6A',
     VALUE_UNDECIDED: '未決定',
     VALUE_NONE: 'なし',
