@@ -903,6 +903,16 @@ clearAllEventsFor(info) {
     if (internalUrl) htmlLines.push(`<a href="${internalUrl}">🗒 社内ページを開く</a>`);
     const htmlBlock = htmlLines.join('<br>');
 
+    // 既存のリンクを削除する関数
+    const removePreviousLinks = (desc) => {
+      return desc
+        .replace(/<a href="[^"]*">📂 顧客フォルダを開く<\/a>/g, '')
+        .replace(/<a href="[^"]*">🗒 社内ページを開く<\/a>/g, '')
+        .replace(/<br>\s*<br>/g, '<br>')  // 連続する<br>を1つに
+        .replace(/\n\n+/g, '\n\n')         // 連続する改行を整理
+        .trim();
+    };
+
     // --- 撮影カレンダー ---
     const shootCal = CalendarApp.getCalendarById(CONFIG.DEADLINE.CALENDAR_ID_SHOOT);
     if (shootCal && info.photoDate) {
@@ -910,11 +920,12 @@ clearAllEventsFor(info) {
       const shootTitle = `${locPart}${info.groom || ''} × ${info.bride || ''}`;
       shootCal.getEventsForDay(info.photoDate).forEach(e => {
         if (e.getTitle() === shootTitle) {
-          const desc = e.getDescription() || '';
-          if (!desc.includes(folderUrl) && !desc.includes(internalUrl)) {
-            e.setDescription(desc + '\n\n' + htmlBlock);
-            console.log(`📎 撮影イベントにリンク追加: ${shootTitle}`);
-          }
+          let desc = e.getDescription() || '';
+          // 既存のリンクを削除
+          desc = removePreviousLinks(desc);
+          // 新しいリンクを追加
+          e.setDescription(desc + (desc ? '\n\n' : '') + htmlBlock);
+          console.log(`📎 撮影イベントにリンク更新: ${shootTitle}`);
         }
       });
     }
@@ -931,11 +942,12 @@ clearAllEventsFor(info) {
       );
       events.forEach(e => {
         if (e.getTitle() === titlePart) {
-          const desc = e.getDescription() || '';
-          if (!desc.includes(folderUrl) && !desc.includes(internalUrl)) {
-            e.setDescription(desc + '\n\n' + htmlBlock);
-            console.log(`📎 締切イベントにリンク追加: ${titlePart}`);
-          }
+          let desc = e.getDescription() || '';
+          // 既存のリンクを削除
+          desc = removePreviousLinks(desc);
+          // 新しいリンクを追加
+          e.setDescription(desc + (desc ? '\n\n' : '') + htmlBlock);
+          console.log(`📎 締切イベントにリンク更新: ${titlePart}`);
         }
       });
     });
