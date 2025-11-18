@@ -170,13 +170,59 @@ function getLatLngFromSheet(location) {
 }
 
 function fetchSunsetTime(latLng, date) {
-  const api = `https://api.sunrise-sunset.org/json?lat=${latLng.lat}&lng=${latLng.lng}&date=${Utilities.formatDate(date, CONFIG.TZ, "yyyy-MM-dd")}&formatted=0&tzid=Asia/Tokyo`;
-  const res = UrlFetchApp.fetch(api, { muteHttpExceptions: true });
-  const json = JSON.parse(res.getContentText());
-  if (!json.results || !json.results.sunset) throw new Error("日没取得エラー");
-  let sunset = new Date(json.results.sunset);
-  if (sunset.getHours() < 9) sunset = new Date(sunset.getTime() + 9 * 3600000);
-  return sunset;
+  // 自動リトライ機能付き（最大3回試行）
+  const maxRetries = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`🌅 日没API呼び出し (試行 ${attempt}/${maxRetries})`);
+
+      // tzidパラメータを削除（APIでサポートされていない）
+      const api = `https://api.sunrise-sunset.org/json?lat=${latLng.lat}&lng=${latLng.lng}&date=${Utilities.formatDate(date, CONFIG.TZ, "yyyy-MM-dd")}&formatted=0`;
+
+      const res = UrlFetchApp.fetch(api, {
+        muteHttpExceptions: true,
+        validateHttpsCertificates: true
+      });
+
+      const statusCode = res.getResponseCode();
+      if (statusCode !== 200) {
+        throw new Error(`HTTPステータス ${statusCode}`);
+      }
+
+      const json = JSON.parse(res.getContentText());
+
+      if (json.status !== 'OK') {
+        throw new Error(`APIステータス: ${json.status}`);
+      }
+
+      if (!json.results || !json.results.sunset) {
+        throw new Error("日没データなし");
+      }
+
+      // UTC時刻をJSTに変換
+      let sunset = new Date(json.results.sunset);
+      if (sunset.getHours() < 9) {
+        sunset = new Date(sunset.getTime() + 9 * 3600000);
+      }
+
+      console.log(`✅ 日没取得成功: ${Utilities.formatDate(sunset, CONFIG.TZ, 'HH:mm')}`);
+      return sunset;
+
+    } catch (err) {
+      lastError = err;
+      console.warn(`⚠️ 試行 ${attempt} 失敗: ${err.message}`);
+
+      // 最終試行以外は1秒待機してリトライ
+      if (attempt < maxRetries) {
+        Utilities.sleep(1000);
+      }
+    }
+  }
+
+  // 全ての試行が失敗
+  throw new Error(`日没時刻の取得に失敗しました（${maxRetries}回試行）: ${lastError.message}`);
 }
 
 /**
