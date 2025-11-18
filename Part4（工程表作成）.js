@@ -183,7 +183,8 @@ function fetchSunsetTime(latLng, date) {
 
       const res = UrlFetchApp.fetch(api, {
         muteHttpExceptions: true,
-        validateHttpsCertificates: true
+        validateHttpsCertificates: true,
+        timeout: 30000  // 30秒のタイムアウト（初回実行の初期化時間を考慮）
       });
 
       const statusCode = res.getResponseCode();
