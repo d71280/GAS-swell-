@@ -829,22 +829,44 @@ function refreshExistingForRow_(row) {
   const folderName = `${info.groom} × ${info.bride}　様`;
   const folder = DriveX.getOrCreateChild(parent, folderName);
 
-  // === 既存ファイルを全部削除 ===
-  const files = folder.getFiles();
-  while (files.hasNext()) {
-    const f = files.next();
-    console.log(`🗑️ 旧ファイル削除: ${f.getName()}`);
-    f.setTrashed(true);
-  }
-
-  // === 最新テンプレートから再生成 ===
+  // 🔒 既存ファイルは削除せず、内容だけ更新（URL固定）
+  // ⚠️ ただし請求書は毎回再発行（削除して再作成）
+  // === 最新テンプレートから内容をコピーして更新 ===
   set.templateIds.forEach(tid => {
     const src  = DriveApp.getFileById(tid);
     const base = detectBaseTitle(src.getName());
     const newName = `${base}_${info.groom} × ${info.bride}　様`;
-    const f = src.makeCopy(newName, folder);
-    applyPairsByMime(f, buildCommonPairs(info));
-    console.log(`📄 再生成: ${f.getName()}`);
+
+    // 🔒 請求書は毎回再発行（削除して再作成）
+    const isInvoice = newName.includes('請求書');
+
+    let f;
+    if (isInvoice) {
+      // 請求書：既存ファイルを削除して新規作成
+      const existingFiles = folder.getFilesByName(newName);
+      while(existingFiles.hasNext()){
+        existingFiles.next().setTrashed(true);
+        console.log(`🗑️ 請求書を削除: ${newName}`);
+      }
+      f = src.makeCopy(newName, folder);
+      console.log(`📄 請求書を再発行: ${newName}`);
+
+      // 請求書はプレースホルダー置換のみ
+      applyPairsByMime(f, buildCommonPairs(info));
+    } else {
+      // 案内状など：既存ファイルを使用（URL固定）
+      f = DriveX.copyIfMissing(folder, tid, newName);
+
+      // 🔒 Google Docs/Slidesの場合、テンプレートから内容をコピー（URL維持）
+      if(f.getMimeType() === MimeType.GOOGLE_DOCS){
+        Docs.copyTemplateContent(tid, f.getId());
+      } else if(f.getMimeType() === MimeType.GOOGLE_SLIDES){
+        Docs.copyTemplateSlidesContent(tid, f.getId());
+      }
+
+      applyPairsByMime(f, buildCommonPairs(info));
+      console.log(`📄 更新: ${f.getName()}`);
+    }
   });
 
   // === 社内ページも再生成（セクション削除＋作り直し／その他だけ保持） ===
@@ -857,6 +879,7 @@ function refreshExistingForRow_(row) {
     // 既存見出し検索
     let titlePara = body.getParagraphs().find(p => p.getText().trim() === titleText);
     let otherMemo = "";
+    let existingScheduleText = "";  // 🔒 社内スケジュール保持用
 
     if (!titlePara) {
       // 初回：見出し新規
@@ -865,8 +888,9 @@ function refreshExistingForRow_(row) {
         .setHeading(DocumentApp.ParagraphHeading.HEADING1);
       body.appendParagraph('');
     } else {
-      // 既存セクションから「その他」だけ救出
+      // 既存セクションから「その他」と「社内スケジュール」を救出
       otherMemo = getOtherMemoFromSection_(body, titlePara);
+      existingScheduleText = getScheduleTextFromSection_(body, titlePara);  // 🔒
       // 既存セクションをまるごとクリア
       clearSectionAfterHeading_(body, titlePara);
     }
@@ -900,23 +924,38 @@ function refreshExistingForRow_(row) {
     // 🗓 社内スケジュール見出し
     body.insertParagraph(insertAt + 1, "🗓 社内スケジュール")
       .setHeading(DocumentApp.ParagraphHeading.HEADING2);
-    body.insertParagraph(insertAt + 2, "{{社内スケジュール}}");
+
+    // 🔒 既存のスケジュールテキストがあれば復元、なければプレースホルダー
+    const scheduleContent = existingScheduleText || "{{社内スケジュール}}";
+    body.insertParagraph(insertAt + 2, scheduleContent);
 
     // 🎥 ムービーヒアリング情報
     const hSheet   = U.sh(CONFIG.SHEETS.HEARING);
     const hData    = hSheet.getDataRange().getValues();
     const hHeaders = hData[0];
-    const hKey     = `${info.groom}_${info.bride}`;
-    const hearingRow = hData.find(
-      r => `${r[hHeaders.indexOf("新郎名")]}_${r[hHeaders.indexOf("新婦名")]}` === hKey
-    );
+
+    // 🔒 正規化して検索（空白・敬称を削除）
+    const normalize = (str) => String(str || '').replace(/[\s　様さん]/g, '');
+    const groomNorm = normalize(info.groom);
+    const brideNorm = normalize(info.bride);
+
+    let hearingRow = null;
+    for (let i = 1; i < hData.length; i++) {
+      const hGroom = normalize(hData[i][hHeaders.indexOf("新郎名")] || '');
+      const hBride = normalize(hData[i][hHeaders.indexOf("新婦名")] || '');
+
+      if (hGroom === groomNorm && hBride === brideNorm) {
+        hearingRow = hData[i];
+        break;
+      }
+    }
 
     if (hearingRow) {
       body.insertParagraph(insertAt + 3, "🎥 ムービーヒアリング情報")
         .setHeading(DocumentApp.ParagraphHeading.HEADING2);
       const hTable = [["項目", "内容"]];
-      hHeaders.forEach(h =>
-        hTable.push([h, hearingRow[hHeaders.indexOf(h)] ?? ""])
+      hHeaders.forEach((h, idx) =>
+        hTable.push([h, hearingRow[idx] ?? ""])
       );
       insertTableAt_(body, insertAt + 4, hTable);
     }
@@ -1076,19 +1115,6 @@ function runCalendarSyncForSelectedRow_(){
     }
   });
   SpreadsheetApp.getActive().toast('📅 カレンダー同期を実行しました');
-}
-
-// スケジュール反映
-function runScheduleApplyForSelectedRow_(){
-  const sh = U.sh(CONFIG.SHEETS.MAIN);
-  const ranges = sh.getActiveRangeList().getRanges();
-  ranges.forEach(r=>{
-    const row = r.getRow();
-    if(row<=1) return;
-    const info = readRowInfo(row);
-    DL.refreshShootEventDescription(info);
-  });
-  SpreadsheetApp.getActive().toast('📋 スケジュール・案内状反映を更新しました');
 }
 
 // ===== テスト用：カレンダー削除のデバッグ関数 =====
